@@ -9,7 +9,7 @@ The icon is stored the way macOS expects custom file icons: an `icns` resource i
 ## Quick start
 
 ```sh
-uvx --from git+https://github.com/willpike-suki/workspace-icon-generator workspace-icon-generator path/to/my-project.code-workspace --abbr MP
+uvx --from git+https://github.com/pike00/workspace-icon-generator workspace-icon-generator path/to/my-project.code-workspace --abbr MP
 ```
 
 ## Requirements
