@@ -11,12 +11,13 @@ nothing but the icon.
 Usage:
   uv run workspace-icon-generator TARGET --abbr CI [--top HEX --bottom HEX] [--work DIR]
 
-Needs Xcode CLT (Rez, DeRez, SetFile), iconutil, and rsvg-convert
-(brew install librsvg). The Dock may keep the old icon until `killall Dock`.
+Needs rsvg-convert (brew install librsvg). iconutil and xattr ship with macOS.
+The Dock may keep the old icon until `killall Dock`.
 """
 import argparse
 import pathlib
 import shutil
+import struct
 import subprocess
 import tempfile
 
@@ -41,11 +42,61 @@ ICONSET = [
     ("icon_512x512.png", 512), ("icon_512x512@2x.png", 1024),
 ]
 CUSTOM_ICON_ID = -16455
+RESOURCE_FORK = "com.apple.ResourceFork"
+FINDER_INFO = "com.apple.FinderInfo"
 
 
 def run(*args):
-    # DeRez writes Mac Roman comments, so decode as Latin-1 (accepts any byte).
-    return subprocess.run(args, check=True, capture_output=True, encoding="latin-1").stdout
+    return subprocess.run(args, check=True, capture_output=True, text=True).stdout
+
+
+def read_xattr(path, name):
+    # Raw bytes of an extended attribute, or None if it is not set.
+    result = subprocess.run(["xattr", "-px", name, str(path)], capture_output=True, text=True)
+    if result.returncode != 0:
+        return None
+    return bytes.fromhex("".join(result.stdout.split()))
+
+
+def write_xattr(path, name, value):
+    run("xattr", "-w", "-x", name, value.hex(), str(path))
+
+
+def resource_fork(icns):
+    # Classic resource fork: 256-byte header, resource data, then the resource map.
+    # The map holds one 'icns' type with one unnamed resource.
+    data = struct.pack(">I", len(icns)) + icns
+    type_list = struct.pack(">H4sHH", 0, b"icns", 0, 10)
+    reference = struct.pack(">hH", CUSTOM_ICON_ID, 0xFFFF) + bytes(8)  # attributes, data offset, handle: all 0
+    map_header = bytes(24) + struct.pack(">HH", 28, 28 + len(type_list) + len(reference))
+    resource_map = map_header + type_list + reference
+    header = struct.pack(">IIII", 256, 256 + len(data), len(data), len(resource_map))
+    return header + bytes(240) + data + resource_map
+
+
+def read_resource(fork, res_type, res_id):
+    # Return the bytes of one resource in a resource fork, or None if it is absent.
+    data_start, map_start = struct.unpack(">II", fork[:8])
+    type_list = map_start + struct.unpack(">H", fork[map_start + 24:map_start + 26])[0]
+    (type_count,) = struct.unpack(">H", fork[type_list:type_list + 2])
+    for i in range(type_count + 1):
+        code, ref_count, ref_offset = struct.unpack(">4sHH", fork[type_list + 2 + 8 * i:type_list + 10 + 8 * i])
+        if code != res_type:
+            continue
+        for j in range(ref_count + 1):
+            ref = type_list + ref_offset + 12 * j
+            if struct.unpack(">h", fork[ref:ref + 2])[0] == res_id:
+                start = data_start + int.from_bytes(fork[ref + 5:ref + 8], "big")
+                (length,) = struct.unpack(">I", fork[start:start + 4])
+                return fork[start + 4:start + 4 + length]
+    return None
+
+
+def set_custom_icon_flag(target):
+    # FinderInfo is 32 bytes. The custom-icon bit (0x0400) is 0x04 in the high byte of the flags at offset 8.
+    info = bytearray((read_xattr(target, FINDER_INFO) or b"").ljust(32, b"\0"))
+    info[8] |= 0x04
+    write_xattr(target, FINDER_INFO, bytes(info))
 
 
 def main():
@@ -77,22 +128,16 @@ def main():
     preview = work / "preview-1024.png"
     shutil.copy(iconset / "icon_512x512@2x.png", preview)
 
-    # Wrap the .icns bytes as a Rez 'icns' resource.
+    # Write the .icns bytes as the 'icns' resource, replacing any existing resource fork, then set the custom-icon bit.
     data = icns.read_bytes()
-    lines = [f'\t$"{data[i:i + 32].hex().upper()}"' for i in range(0, len(data), 32)]
-    rsrc = work / "icon.r"
-    rsrc.write_text(f"data 'icns' ({CUSTOM_ICON_ID}) {{\n" + "\n".join(lines) + "\n};\n")
+    write_xattr(target, RESOURCE_FORK, resource_fork(data))
+    set_custom_icon_flag(target)
 
-    has_fork = subprocess.run(["xattr", "-p", "com.apple.ResourceFork", str(target)], capture_output=True).returncode == 0
-    if has_fork:
-        run("xattr", "-d", "com.apple.ResourceFork", str(target))
-    run("Rez", "-append", str(rsrc), "-o", str(target))
-    run("SetFile", "-a", "C", str(target))
-
-    # Check the result: the icon resource is there and the custom-icon bit (0x0400 in FinderInfo) is set.
-    resource_ok = f"'icns' ({CUSTOM_ICON_ID})" in run("DeRez", "-only", "icns", str(target))
-    finder_info = bytes.fromhex("".join(run("xattr", "-px", "com.apple.FinderInfo", str(target)).split()))
-    flag_ok = bool(finder_info[8] & 0x04)
+    # Check the result: read the icon resource and the custom-icon bit (0x0400 in FinderInfo) back from the file.
+    fork = read_xattr(target, RESOURCE_FORK) or b""
+    resource_ok = bool(fork) and read_resource(fork, b"icns", CUSTOM_ICON_ID) == data
+    finder_info = read_xattr(target, FINDER_INFO) or b""
+    flag_ok = len(finder_info) > 8 and bool(finder_info[8] & 0x04)
     print(f"preview:           {preview}")
     print(f"icon resource:     {'ok' if resource_ok else 'MISSING'}")
     print(f"custom-icon flag:  {'ok' if flag_ok else 'MISSING'}")

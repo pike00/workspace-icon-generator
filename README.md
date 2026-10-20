@@ -4,16 +4,9 @@ Gives a VS Code `.code-workspace` file its own Dock icon on macOS: a rounded squ
 
 The icon is stored the way macOS expects custom file icons: an `icns` resource in the file's resource fork, plus the custom-icon flag in Finder info. Once both are set, the Dock shows the workspace's icon instead of the generic VS Code document icon.
 
+![alt text](image.png)
+
 ## Quick start
-
-```sh
-git clone https://github.com/willpike-suki/workspace-icon-generator
-cd workspace-icon-generator
-uv run workspace-icon-generator path/to/my-project.code-workspace --abbr MP
-killall Dock   # make the Dock drop its cached icon
-```
-
-Without cloning, `uvx` can run it straight from GitHub:
 
 ```sh
 uvx --from git+https://github.com/willpike-suki/workspace-icon-generator workspace-icon-generator path/to/my-project.code-workspace --abbr MP
@@ -21,8 +14,7 @@ uvx --from git+https://github.com/willpike-suki/workspace-icon-generator workspa
 
 ## Requirements
 
-- macOS. The script uses `Rez`, `DeRez`, and `SetFile` from the Xcode command line tools, plus `iconutil`.
-- Xcode command line tools: `xcode-select --install`
+- macOS. The script uses `iconutil` and `xattr`, which ship with macOS. No Xcode tools are needed.
 - `rsvg-convert`: `brew install librsvg`
 - [uv](https://docs.astral.sh/uv/): `brew install uv`
 
@@ -38,16 +30,3 @@ uvx --from git+https://github.com/willpike-suki/workspace-icon-generator workspa
 
 The script prints the path of a 1024 px preview PNG, then checks that the icon resource and the custom-icon flag are both in place. It exits with an error if either is missing.
 
-## Caveats
-
-- The script replaces the target's entire resource fork. Only run it on workspace files, whose fork holds nothing but the icon.
-- Copying or archiving the file with a tool that drops resource forks loses the icon. Run the script again after copying.
-- The Dock may keep showing the old icon until you run `killall Dock`.
-
-## How it works
-
-1. Renders an SVG template at each size an iconset needs, using `rsvg-convert`.
-2. Packs the iconset into an `.icns` file with `iconutil`.
-3. Wraps the `.icns` bytes as an `'icns'` resource with ID -16455 and appends it to the target's resource fork with `Rez`.
-4. Sets the custom-icon bit (0x0400 in FinderInfo) with `SetFile -a C`.
-5. Reads the resource and the flag back to confirm they applied.
