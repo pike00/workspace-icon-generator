@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "workspace-icon-generator"
+version = "0.1.0"
+description = "Give a VS Code .code-workspace file a custom macOS Dock icon"
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+]
+
+[project.scripts]
+workspace-icon-generator = "workspace_icon_generator:main"
+
+[tool.setuptools]
+py-modules = ["workspace_icon_generator"]
