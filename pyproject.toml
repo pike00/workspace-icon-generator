@@ -7,7 +7,8 @@ name = "workspace-icon-generator"
 version = "0.1.0"
 description = "Give a VS Code .code-workspace file a custom macOS Dock icon"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
+dependencies = ["resvg-py>=0.5"]
 classifiers = [
     "Operating System :: MacOS",
     "Programming Language :: Python :: 3",

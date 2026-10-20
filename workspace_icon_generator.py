@@ -11,7 +11,7 @@ nothing but the icon.
 Usage:
   uv run workspace-icon-generator TARGET --abbr CI [--top HEX --bottom HEX] [--work DIR]
 
-Needs rsvg-convert (brew install librsvg). iconutil and xattr ship with macOS.
+Renders the SVG with resvg-py (installed by uv). iconutil and xattr ship with macOS.
 The Dock may keep the old icon until `killall Dock`.
 """
 import argparse
@@ -20,6 +20,8 @@ import shutil
 import struct
 import subprocess
 import tempfile
+
+from resvg_py import svg_to_bytes
 
 SVG = """<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
   <defs>
@@ -121,7 +123,7 @@ def main():
     svg = work / "icon.svg"
     svg.write_text(SVG.format(top=args.top, bottom=args.bottom, abbr=args.abbr, size=size))
     for name, px in ICONSET:
-        run("rsvg-convert", "-w", str(px), "-h", str(px), str(svg), "-o", str(iconset / name))
+        (iconset / name).write_bytes(svg_to_bytes(svg_path=str(svg), width=px, height=px))
     icns = work / "icon.icns"
     run("iconutil", "-c", "icns", str(iconset), "-o", str(icns))
 

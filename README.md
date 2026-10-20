@@ -14,9 +14,8 @@ uvx --from git+https://github.com/willpike-suki/workspace-icon-generator workspa
 
 ## Requirements
 
-- macOS. The script uses `iconutil` and `xattr`, which ship with macOS. No Xcode tools are needed.
-- `rsvg-convert`: `brew install librsvg`
-- [uv](https://docs.astral.sh/uv/): `brew install uv`
+- macOS. The script uses `iconutil` and `xattr`, which ship with macOS.
+- [uv](https://docs.astral.sh/uv/): `brew install uv`. uv installs the one Python dependency, `resvg-py`, which renders the icon. No Xcode tools or other Homebrew packages are needed.
 
 ## Options
 
